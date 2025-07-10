@@ -1,11 +1,20 @@
 # -*- coding: utf-8 -*-
-import vimbastructure as structs
-from vimbadll import VimbaDLL
-from vimbaexception import VimbaException
-from vimbasystem import VimbaSystem
-from vimbacamera import VimbaCamera
-from vimbainterface import VimbaInterface
+'''import vimbastructure as structs
+from .vimbadll import VimbaDLL
+from .vimbaexception import VimbaException
+from .vimbasystem import VimbaSystem
+from .vimbacamera import VimbaCamera
+from .vimbainterface import VimbaInterface
 from ctypes import *
+'''
+from . import vimbastructure as structs
+from .vimbadll import VimbaDLL
+from .vimbaexception import VimbaException
+from .vimbasystem import VimbaSystem
+from .vimbacamera import VimbaCamera
+from .vimbainterface import VimbaInterface
+from ctypes import *
+
 
 
 class Vimba(object):

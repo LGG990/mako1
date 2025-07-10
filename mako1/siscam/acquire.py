@@ -50,7 +50,7 @@
 #		- AcquireThread : Opens, Sets timing, starts taking images, saves to queue, closes ('with closing')
 #		
 #
-from __future__ import with_statement
+
 
 from pymba import *
 
@@ -59,7 +59,7 @@ import wx, wx.aui, wx.lib.newevent
 import numpy as np
 
 import os, os.path
-import threading, Queue
+import threading, queue
 from contextlib import closing
 
 import time
@@ -68,9 +68,10 @@ import settings
 import ImagePanel
 import readsis
 from png_writer import PngWriter
+import importlib
 
-reload(settings)
-reload(ImagePanel)
+importlib.reload(settings)
+importlib.reload(ImagePanel)
 from camera import CamTimeoutError
 
 import sys
@@ -90,13 +91,13 @@ imgFile = open(os.getcwd()+'imgValues.txt','w+')
 if useAVT:
     try:
         import AVTcam
-        reload(AVTcam)
+        importlib.reload(AVTcam)
         useAVT = True
         # Guppy = AVTcam.AVTcam() ### might be better this way. right now implemented in if __name__ = __main__ block.
         VimbAcq = AVTcam.VimbAcq()	
     except ImportError:
         useAVT = False
-        print "AVT not available"
+        print("AVT not available")
 
         # configfile_theta = settings.configfile ### What to do here?
     
@@ -104,12 +105,12 @@ if useAVT:
 if useTheta:
     try:
         import SIS
-        reload(SIS)
+        importlib.reload(SIS)
         useTheta = True
         
     except ImportError:
         useTheta = False
-        print "Theta not available"
+        print("Theta not available")
 
     if not usePseudoTheta:
         configfile_theta = settings.configfile
@@ -121,22 +122,22 @@ if useTheta:
 if useBluefox:
     try:
         import IMPACT
-        reload(IMPACT)
+        importlib.reload(IMPACT)
         useBluefox = True
     except ImportError:
         useBluefox = False
-        print "Bluefox not available!"
+        print("Bluefox not available!")
 
 if useSony:
     try:
         import VCam
-        reload(VCam)
+        importlib.reload(VCam)
         useSony = True
         configfiles_sony = settings.configfiles_sony
         cam_sony = VCam.VCam()
     except ImportError:
         useSony = False
-        print "Sony not available"
+        print("Sony not available")
         
 (AVTSingleImageAcquiredEvent, EVT_IMAGE_ACQUIRE_SINGLE_AVT) = wx.lib.newevent.NewEvent() ####AVT
 (AVTTripleImageAcquiredEvent, EVT_IMAGE_ACQUIRE_TRIPLE_AVT) = wx.lib.newevent.NewEvent() ####AVT
@@ -234,7 +235,7 @@ class AcquireThreadTheta(AcquireThread):
                 except CamTimeoutError:
                     pass
                 except SIS.SislibError:
-                    print "Error acquiring image from Theta"
+                    print("Error acquiring image from Theta")
                 else:
                     img = self.cam.roidata
                     self.nr += 1
@@ -243,20 +244,20 @@ class AcquireThreadTheta(AcquireThread):
             #put empty image to queue
             self.queue.put((- 1, None))
 
-        print "SISImageProducerThread exiting"
+        print("SISImageProducerThread exiting")
 
     def stop(self):
         self.running = False
         try:
             self.cam.stop()
-        except SIS.SislibError, e:
-            print e
+        except SIS.SislibError as e:
+            print(e)
 ######AVT ----------- New AVT-section -------- added 15012015
 class AcquireThreadAVT(AcquireThread): #To be used with app=ImgAcqApp (self), cam=Guppy, queue...
 
     def run(self):
         self.running = True
-        print self.app.imaging_mode_AVT
+        print(self.app.imaging_mode_AVT)
         with closing(self.cam.open(mode = self.app.imaging_mode_AVT,pixel = self.app.pixelformat_AVT)):
             ## TODO set_timing stuff
             if self.app.imaging_mode_AVT == 'live':
@@ -269,7 +270,7 @@ class AcquireThreadAVT(AcquireThread): #To be used with app=ImgAcqApp (self), ca
             while self.running:
                 img = self.cam.SingleImage(wait)
                 imTime = time.time()-time0
-                print "imTime", imTime
+                print("imTime", imTime)
                 #print self.camera0.ExposureMode
                 self.nr += 1
                 self.queue.put((self.nr, img.astype(self.app.pixelformat_AVT),imTime))
@@ -286,7 +287,7 @@ class AcquireThreadAVT(AcquireThread): #To be used with app=ImgAcqApp (self), ca
 #                    self.running = False
 #                    raise Exception("Image not acquired. Closing Camera")
             #self.queue.put((-1, None,0))
-        print '------------ AcquireThreadAVT finished --------- '
+        print('------------ AcquireThreadAVT finished --------- ')
         self.running = False
     def stop(self):
         self.cam.StopImageAcquisition(self.app.imaging_mode_AVT)
@@ -310,9 +311,9 @@ class AcquireThreadBluefox(AcquireThread):
                     self.cam.wait(100)
                 except IMPACT.TimeoutError:
                     pass
-                except Exception, e:
-                    print "Exception happened in acquiring image from Bluefox"
-                    print e
+                except Exception as e:
+                    print("Exception happened in acquiring image from Bluefox")
+                    print(e)
                     break
                 else:
                     img = self.cam.data
@@ -321,7 +322,7 @@ class AcquireThreadBluefox(AcquireThread):
 
             self.queue.put((- 1, None))
 
-        print "AcquireThreadBluefox finished"
+        print("AcquireThreadBluefox finished")
         
 class AcquireThreadSony(AcquireThread):
     def __init__(self, app, cam, queue, configfile, nimg=1, ):
@@ -343,9 +344,9 @@ class AcquireThreadSony(AcquireThread):
                     imgs = self.cam.snap(self.nimg)
                 except CamTimeoutError:
                     pass
-                except Exception, e:
-                    print "unknown exception in acquiring images from Sony"
-                    print e
+                except Exception as e:
+                    print("unknown exception in acquiring images from Sony")
+                    print(e)
                     break
                 else:
                     self.nr += self.nimg
@@ -414,7 +415,7 @@ class ConsumerThreadThetaSingleImage(ConsumerThread):
             try:
                 nr, img = self.queue.get(timeout=10)
                 
-            except Queue.Empty:
+            except queue.Empty:
                 self.message('R')
 
             else:
@@ -423,24 +424,24 @@ class ConsumerThreadThetaSingleImage(ConsumerThread):
                     self.message('I')
 
         self.message('E')
-        print "ImageConsumerThread exiting!"
+        print("ImageConsumerThread exiting!")
 
 ######AVT ----------- New AVT-section -------- added 15012015
 class ConsumerThreadAVTSingleImage(ConsumerThread):
 
     def run(self):
         self.running = True
-        print 'consumer thread started. live'
+        print('consumer thread started. live')
         while self.running:
             try:
                 nr, img, imtime = self.queue.get()
-                print 'got image'
-            except Queue.Empty:
-                print "timout in Image consumer, resetting"
+                print('got image')
+            except queue.Empty:
+                print("timout in Image consumer, resetting")
                 pass
 
             else:
-                print "consumer: got image", nr
+                print("consumer: got image", nr)
                
                 if nr > 0:
                     wx.PostEvent(self.app, AVTSingleImageAcquiredEvent(imgnr=nr, img=img))
@@ -465,8 +466,8 @@ class ConsumerThreadBluefoxSingleImage(ConsumerThread):
             try:
                 nr, img = self.queue.get(timeout=10)
 
-            except Queue.Empty:
-                print "timout in Image consumer, resetting"
+            except queue.Empty:
+                print("timout in Image consumer, resetting")
                 pass
 
             else:
@@ -476,7 +477,7 @@ class ConsumerThreadBluefoxSingleImage(ConsumerThread):
                     #if nr%100 == 0:
                     #    self.save_abs_img(settings.imagefile, np.vstack((img, img)))
 
-        print "ImageConsumerThread exiting!"
+        print("ImageConsumerThread exiting!")
         self.message('E')
 
 
@@ -499,7 +500,7 @@ class ConsumerThreadThetaTripleImage(ConsumerThread):
                 self.message('3')
                 if not self.running: break
 
-            except Queue.Empty:
+            except queue.Empty:
                 self.message(None)
                 self.message('W')
 
@@ -536,16 +537,16 @@ class ConsumerThreadThetaTripleImage(ConsumerThread):
 
 
         self.message('E')
-        print "ImageConsumerThread exiting!"
+        print("ImageConsumerThread exiting!")
 ######AVT ----------- New AVT-section -------- added 19022015
 class ConsumerThreadAVTTripleImage(ConsumerThread):
     def stop(self):
-        with Queue.mutex:
-            Queue.clear()
+        with queue.mutex:
+            queue.clear()
         self.running = False
     def run(self):
         self.running = True
-        print 'Consumer Thread started (Absorption)'
+        print('Consumer Thread started (Absorption)')
         while self.running:
             try:
                 
@@ -555,17 +556,17 @@ class ConsumerThreadAVTTripleImage(ConsumerThread):
 
                 nr3, img3, time3 = self.queue.get(timeout=None)
 
-            except Queue.Empty:
-                print "Still waiting to acquire images"
+            except queue.Empty:
+                print("Still waiting to acquire images")
                 #This doesn't actually reset it. If empty, we should wait for the next image
                 pass
                 
             else:
-                print "consumer: got image", nr1, nr2, nr3
-                print "image times: ", time1, time2, time3
+                print("consumer: got image", nr1, nr2, nr3)
+                print("image times: ", time1, time2, time3)
 				#calculate absorption image
                 alpha=np.float(np.sum(img1[270:470,0:100]))/np.float(np.sum(img2[270:470,0:100]))
-                print "alpha", alpha
+                print("alpha", alpha)
                 img = -np.log((np.abs(img1)-np.abs(img3) + 1.0)/(np.abs(img2)-np.abs(img3)+1.0))
                 data = {'image1': img1,
                         'image2': img2,
@@ -581,20 +582,20 @@ class ConsumerThreadAVTTripleImage(ConsumerThread):
                 
                 # PngWriter(settings.testfile, img, bitdepth=8)
                 # print 'Consumer: queue size', self.queue.qsize()
-        print "ImageConsumerThread exiting!"
+        print("ImageConsumerThread exiting!")
         self.message('E')
         
 
 class ConsumerThreadAVTDoubleImage(ConsumerThread):
     def stop(self):
         if not self.queue.empty():
-            print "still waiting for images"
+            print("still waiting for images")
             self.running = False
         else:
             self.running = False
     def run(self):
         self.running = True
-        print 'Consumer Thread started (Fluorescence)'
+        print('Consumer Thread started (Fluorescence)')
         while self.running:
             if not self.queue.empty():
                 
@@ -617,7 +618,7 @@ class ConsumerThreadAVTDoubleImage(ConsumerThread):
                 self.save_abs_img(settings.testfile, img)
 
 
-        print "ImageConsumerThread exiting!"
+        print("ImageConsumerThread exiting!")
         self.message('E')
 
 ######## ---------------------- End new section ------------------        
@@ -628,7 +629,7 @@ class ConsumerThreadSony(ConsumerThread):
         while self.running:
             try:
                 nr, imgs = self.queue.get(timeout = 5)
-            except Queue.Empty:
+            except queue.Empty:
                 self.message('R')
                 
             else:
@@ -649,7 +650,7 @@ class ConsumerThreadSony(ConsumerThread):
                     wx.PostEvent(self.app, SonyTripleImageAcquiredEvent(data=data))
                     self.save_abs_img(settings.imagefile, np.vstack((img,img)))
         self.message('E')
-        print "Consumer thread sony finished"
+        print("Consumer thread sony finished")
                     
 
 
@@ -720,10 +721,10 @@ class ImgAcquireApp(wx.App):
         self.ID_AboutMenu = wx.NewId()
 
         #Queues for image acquisition
-        self.imagequeue_AVT = Queue.Queue(3)  ####AVT ; ATTENTION Argument of .queue() not clear
-        self.imagequeue_theta = Queue.Queue(3)
-        self.imagequeue_bluefox = Queue.Queue(2)
-        self.imagequeue_sony = Queue.Queue(2)
+        self.imagequeue_AVT = queue.Queue(3)  ####AVT ; ATTENTION Argument of .queue() not clear
+        self.imagequeue_theta = queue.Queue(3)
+        self.imagequeue_bluefox = queue.Queue(2)
+        self.imagequeue_sony = queue.Queue(2)
 
         #splash screen
         splash = AcquireSplashScreen()
@@ -769,9 +770,9 @@ class ImgAcquireApp(wx.App):
         self.timing_bluefox = CamTiming(exposure=20, repetition=None, live=True)
         self.timing_sony = CamTiming(exposure=1, repetition=None, live=True)
         
-        #self.timing_exposure_theta = 100 #µs
+        #self.timing_exposure_theta = 100 #ï¿½s
         #self.timing_repetition_theta = 600 #ms
-        #self.timing_exposure_bluefox = 20000 #µs
+        #self.timing_exposure_bluefox = 20000 #ï¿½s
         #self.timing_repetition_bluefox = 20 #ms
         
         self.acquiring_theta = False
@@ -1398,15 +1399,15 @@ class ImgAcquireApp(wx.App):
  
     def set_shared_markers_theta(self):
         for image in self.image_panels_theta:
-            map(image.add_marker, self.markers_shared_theta)
+            list(map(image.add_marker, self.markers_shared_theta))
             
     def clear_shared_markers_theta(self):
         for image in self.image_panels_theta:
-            map(image.remove_marker, self.markers_shared_theta)
+            list(map(image.remove_marker, self.markers_shared_theta))
             
     def set_shared_markers_sony(self):
         for image in self.image_panels_sony:
-            map(image.add_marker, self.markers_shared_sony)
+            list(map(image.add_marker, self.markers_shared_sony))
         
     def OnFullscreenButton(self, event):
         if event.Checked():
@@ -1418,28 +1419,28 @@ class ImgAcquireApp(wx.App):
 
     def OnSaveImageTheta(self, event):
         #TODO: needs rework, which image to save?
-        print "save image"
+        print("save image")
         imgA = self.image1a.imgview.get_camimage()
-        print "img A acquired!"
+        print("img A acquired!")
         imgB = self.image1b.imgview.get_camimage()
-        print "img B acquired!"
+        print("img B acquired!")
         readsis.write_raw_image(settings.imagefile, np.vstack((imgA, imgB)))
         wx.PostEvent(self, StatusMessageEvent(data='s'))
         
     def OnSaveImageBluefox(self, event):
-        print "save image"
+        print("save image")
         imgA = self.imageBluefoxA.imgview.get_camimage()
         readsis.write_raw_image(settings.imagefile, np.vstack((imgA, imgA)))
         wx.PostEvent(self, StatusMessageEvent(data='s'))
     
     def OnSaveImageSony(self, event):
-        print "save image"
+        print("save image")
         imgA = self.imageSony1.imgview.get_camimage()
         readsis.write_raw_image(settings.imagefile, np.vstack((imgA, imgA)))
         wx.PostEvent(self, StatusMessageEvent(data='s'))
     def OnSaveImageAVT(self, event):
         # Need to add viewers for each image used in aborption. For now, this just saves the image displayed in the viewer
-        print "save image"
+        print("save image")
         img = self.imageAVT.imgview.get_camimage()
         if self.pixelformat_AVT == np.uint8:
             bd = 8
@@ -1471,7 +1472,7 @@ class ImgAcquireApp(wx.App):
                 self.busy = 0
                 
             if self.busy > 3:
-                print "I am busy, skip displaying"
+                print("I am busy, skip displaying")
                 self.show_status_message('.')
             else:
                 self.image1a.show_image(img1, description="image #%d" % event.imgnr)
@@ -1665,9 +1666,9 @@ class ImgAcquireApp(wx.App):
         self.imgconsumer_AVT.join()
 
         if self.imgproducer_AVT.isAlive():
-            print "could not stop AVT producer thread."
+            print("could not stop AVT producer thread.")
         if self.imgconsumer_AVT.isAlive():
-            print "could not stop AVT consumer threads!"
+            print("could not stop AVT consumer threads!")
 
         self.acquiring_AVT = False
 	
@@ -1723,7 +1724,7 @@ class ImgAcquireApp(wx.App):
         self.imgconsumer_theta.join(2)
             
         if self.imgproducer_theta.isAlive() or self.imgconsumer_theta.isAlive():
-            print "could not stop theta acquisition threads!", threading.enumerate()
+            print("could not stop theta acquisition threads!", threading.enumerate())
 
         self.acquiring_theta = False
         self.menu.EnableTop(self.ID_TimingTheta, True)
@@ -1737,7 +1738,7 @@ class ImgAcquireApp(wx.App):
 
         if self.imgproducer_bluefox.isAlive() \
            or self.imgconsumer_bluefox.isAlive():
-            print "could not stop bluefox acquisition threads!"
+            print("could not stop bluefox acquisition threads!")
 		
         self.acquiring_bluefox = False
 
@@ -1749,7 +1750,7 @@ class ImgAcquireApp(wx.App):
         self.imgconsumer_sony.join(2)
         
         if self.imgproducer_sony.isAlive() or self.imgconsumer_sony.isAlive():
-            print "could not stop sony acquisition threads!"
+            print("could not stop sony acquisition threads!")
         
         self.acquiring_sony = False
         
@@ -1839,7 +1840,7 @@ class ImgAcquireApp(wx.App):
 
         finally:
             setting.close()
-        print "settings saved"
+        print("settings saved")
         self.frame.Refresh()
 
     def OnSettingsLoad(self, event):
@@ -1885,7 +1886,7 @@ class ImgAcquireApp(wx.App):
             
         self.frame.Refresh()
         
-        print "settings loaded"
+        print("settings loaded")
 
     def OnMenuShowAll(self, event):
         self.manager.LoadPerspective(self.perspective_full)
@@ -1893,11 +1894,11 @@ class ImgAcquireApp(wx.App):
         
     def OnMenuImagingModeTheta(self, event):
         if event.Id == self.ID_ImagingModeTheta_Live:
-            print "Live imaging Theta"
+            print("Live imaging Theta")
             self.imaging_mode_theta = 'live'
 
         elif event.Id == self.ID_ImagingModeTheta_Absorption:
-            print "Absorption imaging Theta"
+            print("Absorption imaging Theta")
             self.imaging_mode_theta = 'absorption'
 
         elif event.Id == self.ID_ImagingTheta_RemoveBackground:
@@ -1915,15 +1916,15 @@ class ImgAcquireApp(wx.App):
 
         elif event.Id == self.ID_ImagingModeAVT_Fluorescence:
             self.imaging_mode_AVT = 'fluorescence'
-        print 'set to',self.imaging_mode_AVT
+        print('set to',self.imaging_mode_AVT)
 
     def OnPixelFormatAVT(self,event):
         if event.Id == self.ID_PixelFormat_Mono8:
             self.pixelformat_AVT = np.uint8
-            print 'set to Mono8'
+            print('set to Mono8')
         elif event.Id == self.ID_PixelFormat_Mono16:
             self.pixelformat_AVT = np.uint16
-            print 'set to Mono16'
+            print('set to Mono16')
 
 #### ---------- End new section ----------------			
     def OnMenuImagingModeSony(self, event):
@@ -1965,26 +1966,26 @@ class ImgAcquireApp(wx.App):
         pass
 
     def stop_threads(self):
-        print "shutting down"
+        print("shutting down")
         if self.acquiring_theta:
-            print "stopping threads theta"
+            print("stopping threads theta")
             self.stop_acquisition_theta()
         if self.acquiring_bluefox:
-            print "stopping threads bluefox"
+            print("stopping threads bluefox")
             self.stop_acquisition_bluefox()
         if self.acquiring_AVT:
-            print "stopping threads AVT"
+            print("stopping threads AVT")
             self.stop_acquisition_AVT()
-        print "finished"
+        print("finished")
 
         
         
     def onclose(self, event):
-        print "onclose"
+        print("onclose")
 
         self.stop_threads()
         #self.ToggleGoButton(False)
-        print "threads stopped"
+        print("threads stopped")
             
         #if event.CanVeto():
         #    print "you are not serious"
@@ -2016,7 +2017,7 @@ class TimingDialog(wx.Dialog):
         #entry exposure time
         #TODO: enable float entry
         box = wx.BoxSizer(wx.HORIZONTAL)
-        label = wx.StaticText(self, - 1, "Exposure time (µs)")
+        label = wx.StaticText(self, - 1, "Exposure time (ï¿½s)")
         box.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
         entry = wx.SpinCtrl(self, - 1, "", (50, - 1))
         #entry = wx.SpinButton(self, -1, style = wx.SP_VERTICAL)

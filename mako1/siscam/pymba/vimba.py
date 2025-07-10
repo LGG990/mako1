@@ -1,10 +1,18 @@
 # -*- coding: utf-8 -*-
-import vimbastructure as structs
+'''import vimbastructure as structs
 from vimbadll import VimbaDLL
 from vimbaexception import VimbaException
 from vimbasystem import VimbaSystem
 from vimbacamera import VimbaCamera
 from vimbainterface import VimbaInterface
+from ctypes import *
+'''
+from . import vimbastructure as structs
+from .vimbadll import VimbaDLL
+from .vimbaexception import VimbaException
+from .vimbasystem import VimbaSystem
+from .vimbacamera import VimbaCamera
+from .vimbainterface import VimbaInterface
 from ctypes import *
 
 
@@ -74,7 +82,7 @@ class Vimba(object):
                                                 byref(numFound),
                                                 sizeof(dummyInterfaceInfo))
             if errorCode != 0:
-                print errorCode
+                print(errorCode)
                 raise VimbaException(errorCode)
 
             numInterfaces = numFound.value
@@ -112,7 +120,7 @@ class Vimba(object):
                                              byref(numFound),
                                              sizeof(dummyCameraInfo))
             if errorCode != 0 and errorCode != -9:
-                print errorCode
+                print (errorCode)
                 raise VimbaException(errorCode)
 
             numCameras = numFound.value
