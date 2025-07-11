@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-import exceptions
+#import exceptions
+#Depreciated since Python 3.3, use built-in Exception class instead ^^^
 
 
 class VimbaException(Exception):

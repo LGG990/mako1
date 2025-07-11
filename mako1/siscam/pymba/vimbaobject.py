@@ -1,9 +1,9 @@
 
 # -*- coding: utf-8 -*-
-import vimbastructure as structs
-from vimbaexception import VimbaException
-from vimbafeature import VimbaFeature
-from vimbadll import VimbaDLL
+from . import vimbastructure as structs
+from .vimbaexception import VimbaException
+from .vimbafeature import VimbaFeature
+from .vimbadll import VimbaDLL
 from ctypes import *
 
 

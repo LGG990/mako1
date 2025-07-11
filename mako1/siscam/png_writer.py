@@ -81,10 +81,10 @@ class PngWriter:
 
         if bitdepth is None:
             bitdepth = 8*image.dtype.itemsize
-            print 'PngWriter: New bitdepth:',bitdepth
+            print ('PngWriter: New bitdepth:',bitdepth)
 
         if bitdepth not in [8,16]:
-            print 'bitdepth=',bitdepth
+            print ('bitdepth=',bitdepth)
             raise ValueError("bitdepth not supported")
 
         if significant_bits is None:
@@ -266,7 +266,7 @@ class PngWriter:
 
             #total data length
             l = reduce(operator.add, [len(s) for s in data_comp])
-            print "compressed size: %4.1f"%(100.0*l/(image_array.size*image_array.itemsize))
+            print( "compressed size: %4.1f"%(100.0*l/(image_array.size*image_array.itemsize)))
 
             #write IDAT chunk
             cs = zlib.crc32('IDAT')

@@ -49,56 +49,74 @@
 #		- runs until .stop is called. Intervall between Images ??
 #		- AcquireThread : Opens, Sets timing, starts taking images, saves to queue, closes ('with closing')
 #		
-#
+# ****************************************************IMPORTANT*********************
+# This camera requires the Vimba SDK with the PATH for the vimbaC.dll directory added to the System PATH variable. Otherwise the files under Pymba folder won't find the .dll file.
+#  
 
 
 from pymba import *
-
 import wx, wx.aui, wx.lib.newevent
+try:
+    from wx import adv
+except ImportError:
+    adv = wx  # fallback in case wx.adv doesn't exist (older wxPython)
 
 import numpy as np
-
 import os, os.path
 import threading, queue
 from contextlib import closing
-
 import time
-
 import settings
 import ImagePanel
 import readsis
 from png_writer import PngWriter
 import importlib
-
 importlib.reload(settings)
 importlib.reload(ImagePanel)
 from camera import CamTimeoutError
-
 import sys
 
 ###############################################################################
-#execfile("jmm_test.py") #These line are to make work camera Manta
+#These line are to make work camera Manta
+
+from pymba import Vimba
+
+#with Vimba() as vimba:
+#system = VimbaSystem()#
+#system.startup()
+#system.run_feature_command("GeVDiscoveryAllOnce")
+###############################################################################
+
+###############################################################################
+
+#Depreciated
+#execfile("jmm_test.py") 
+
 vimba = Vimba()
-system = vimba.getSystem()
 vimba.startup()
-system.runFeatureCommand("GeVDiscoveryAllOnce")
+system = vimba.getSystem()
+system.runFeatureCommand(b"GeVDiscoveryAllOnce")
+
+#with Vimba() as vimba:
+#    system = vimba.system()
+#    system.run_feature_command("GeVDiscoveryAllOnce")
 ###############################################################################
 
 #take over settings
 from settings import useTheta, useBluefox, useSony, useAVT
 usePseudoTheta = settings.usePseudoCam
 imgFile = open(os.getcwd()+'imgValues.txt','w+')
-if useAVT:
+VimbAcq = None  # initialize so it's always defined
+
+if settings.useAVT:
     try:
-        import AVTcam
+        from . import AVTcam
         importlib.reload(AVTcam)
         useAVT = True
         # Guppy = AVTcam.AVTcam() ### might be better this way. right now implemented in if __name__ = __main__ block.
         VimbAcq = AVTcam.VimbAcq()	
     except ImportError:
-        useAVT = False
         print("AVT not available")
-
         # configfile_theta = settings.configfile ### What to do here?
     
 
@@ -106,10 +124,7 @@ if useTheta:
     try:
         import SIS
         importlib.reload(SIS)
-        useTheta = True
-        
     except ImportError:
-        useTheta = False
         print("Theta not available")
 
     if not usePseudoTheta:
@@ -117,26 +132,21 @@ if useTheta:
         camtheta = SIS.Cam(config=configfile_theta)
     else:
         camtheta = SIS.PseudoCam()
-        useTheta = True
 
 if useBluefox:
     try:
         import IMPACT
         importlib.reload(IMPACT)
-        useBluefox = True
     except ImportError:
-        useBluefox = False
         print("Bluefox not available!")
 
 if useSony:
     try:
         import VCam
         importlib.reload(VCam)
-        useSony = True
         configfiles_sony = settings.configfiles_sony
         cam_sony = VCam.VCam()
     except ImportError:
-        useSony = False
         print("Sony not available")
         
 (AVTSingleImageAcquiredEvent, EVT_IMAGE_ACQUIRE_SINGLE_AVT) = wx.lib.newevent.NewEvent() ####AVT
@@ -195,7 +205,6 @@ class CamTiming(object):
         
     external = property(get_external, set_external)
 
-
 class AcquireThread(threading.Thread):
     """Base class for image acquisition threads."""
 
@@ -252,6 +261,8 @@ class AcquireThreadTheta(AcquireThread):
             self.cam.stop()
         except SIS.SislibError as e:
             print(e)
+
+            
 ######AVT ----------- New AVT-section -------- added 15012015
 class AcquireThreadAVT(AcquireThread): #To be used with app=ImgAcqApp (self), cam=Guppy, queue...
 
@@ -274,18 +285,18 @@ class AcquireThreadAVT(AcquireThread): #To be used with app=ImgAcqApp (self), ca
                 #print self.camera0.ExposureMode
                 self.nr += 1
                 self.queue.put((self.nr, img.astype(self.app.pixelformat_AVT),imTime))
-#                try:
-#
-#                    img = self.cam.SingleImage(wait)
-#                    imTime = time.time()-time0
-#                    print "imTime", imTime
-#                    #print self.camera0.ExposureMode
-#                    self.nr += 1
-#                    self.queue.put((self.nr, img.astype(self.app.pixelformat_AVT),imTime))
-#                except:
-#                    self.cam.StopImageAcquisition(self.app.imaging_mode_AVT)
-#                    self.running = False
-#                    raise Exception("Image not acquired. Closing Camera")
+                try:
+
+                    img = self.cam.SingleImage(wait)
+                    imTime = time.time()-time0
+                    print ("imTime", imTime)
+                    #print self.camera0.ExposureMode
+                    self.nr += 1
+                    self.queue.put((self.nr, img.astype(self.app.pixelformat_AVT),imTime))
+                except:
+                    self.cam.StopImageAcquisition(self.app.imaging_mode_AVT)
+                    self.running = False
+                    raise Exception("Image not acquired. Closing Camera")
             #self.queue.put((-1, None,0))
         print('------------ AcquireThreadAVT finished --------- ')
         self.running = False
@@ -378,17 +389,10 @@ class ConsumerThread(threading.Thread):
     def save_abs_img(self, filename, img):
         if useAVT:
             pixVal = self.app.pixelformat_AVT
-            
-            img = img*100.0
-            img[img<0.0]=0.0
-            img[img>(255.0)]=0.0
-            rawimg = (img).astype(pixVal)
-            
-            
-           # rawimg = (45.0 * (img)+0.5).astype(pixVal)#change to 100 for trap
-
+            #rawimg = img.astype(pixVal)
+            rawimg = (45 * (img + 0.2)).astype(pixVal)#change to 100 for trap
         else:
-            rawimg = (255.0 * (img)+0.5).astype(np.uint8)
+            rawimg = (45 * (img + 0.2)).astype(np.uint16)
 
         # readsis.write_raw_image(filename, rawimg)
         # print 'DEBUG MODE! bitdepth before saving abs = ',rawimg.dtype.itemsize
@@ -654,13 +658,13 @@ class ConsumerThreadSony(ConsumerThread):
                     
 
 
-class AcquireSplashScreen(wx.SplashScreen):
+class AcquireSplashScreen(wx.adv.SplashScreen):
     def __init__(self):
         bitmap = wx.Image(os.path.join(settings.bitmappath, 'acquire_splash.png'),
                           wx.BITMAP_TYPE_PNG).ConvertToBitmap()
-        wx.SplashScreen.__init__(self,
+        wx.adv.SplashScreen.__init__(self,
                                  bitmap,
-                                 wx.SPLASH_CENTRE_ON_SCREEN | wx.SPLASH_TIMEOUT,
+                                 wx.adv.SPLASH_CENTRE_ON_SCREEN | wx.adv.SPLASH_TIMEOUT,
                                  5000, None, - 1)
 
 
@@ -670,55 +674,61 @@ class ImgAcquireApp(wx.App):
     def OnInit(self):
 
         #IDs
-        self.ID_ShowAll = wx.NewId()
-        self.ID_AcquireAVTButton = wx.NewId()  #####AVT
-        self.ID_AcquireThetaButton = wx.NewId()
-        self.ID_AcquireBlueFoxButton = wx.NewId()
-        self.ID_AcquireSonyButton = wx.NewId()
+        self.ID_ShowAll = wx.NewIdRef()
+        self.ID_AcquireAVTButton = wx.NewIdRef()  #####AVT
+        self.ID_AcquireThetaButton = wx.NewIdRef()
+        self.ID_AcquireBlueFoxButton = wx.NewIdRef()
+        self.ID_AcquireSonyButton = wx.NewIdRef()
+        self.ID_fullscreen = wx.NewIdRef()
 
-        self.ID_TimingAVTInternal = wx.NewId()  #####AVT
-        self.ID_TimingAVTExternal = wx.NewId()  #####AVT
-        self.ID_TimingAVTSettings = wx.NewId()  #####AVT
+        self.ID_TimingAVTInternal = wx.NewIdRef()  #####AVT
+        self.ID_TimingAVTExternal = wx.NewIdRef()  #####AVT
+        self.ID_TimingAVTSettings = wx.NewIdRef()  #####AVT
 		
-        self.ID_TimingThetaInternal = wx.NewId()
-        self.ID_TimingThetaExternal = wx.NewId()
-        self.ID_TimingThetaSettings = wx.NewId()
+        self.ID_TimingThetaInternal = wx.NewIdRef()
+        self.ID_TimingThetaExternal = wx.NewIdRef()
+        self.ID_TimingThetaSettings = wx.NewIdRef()
 
-        self.ID_TimingBlueFoxInternal = wx.NewId()
-        self.ID_TimingBlueFoxExternal = wx.NewId()
-        self.ID_TimingBlueFoxSettings = wx.NewId()
+        self.ID_TimingBlueFoxInternal = wx.NewIdRef()
+        self.ID_TimingBlueFoxExternal = wx.NewIdRef()
+        self.ID_TimingBlueFoxSettings = wx.NewIdRef()
         
-        self.ID_TimingSonyInternal = wx.NewId()
-        self.ID_TimingSonyExternal = wx.NewId()
-        self.ID_TimingSonySettings = wx.NewId()
+        self.ID_TimingSonyInternal = wx.NewIdRef()
+        self.ID_TimingSonyExternal = wx.NewIdRef()
+        self.ID_TimingSonySettings = wx.NewIdRef()
         
-        self.ID_SonyCam1 = wx.NewId()
-        self.ID_SonyCam2 = wx.NewId()
+        self.ID_SonyCam1 = wx.NewIdRef()
+        self.ID_SonyCam2 = wx.NewIdRef()
 		
-        self.ID_ImagingModeAVT_Live = wx.NewId()  #####AVT
-        self.ID_ImagingModeAVT_Absorption = wx.NewId()  #####AVT
-        self.ID_ImagingModeAVT_Fluorescence = wx.NewId()
-        self.ID_ImagingModeAVT = wx.NewId()
-        self.ID_ImagingAVT_RemoveBackground = wx.NewId()  #####AVT
-        self.ID_ImagingAVT_UseROI = wx.NewId()  #####AVT
+        self.ID_ImagingModeAVT_Live = wx.NewIdRef()  #####AVT
+        self.ID_ImagingModeAVT_Absorption = wx.NewIdRef()  #####AVT
+        self.ID_ImagingModeAVT_Fluorescence = wx.NewIdRef()
+        self.ID_ImagingModeAVT = wx.NewIdRef()
+        self.ID_ImagingAVT_RemoveBackground = wx.NewIdRef()  #####AVT
+        self.ID_ImagingAVT_UseROI = wx.NewIdRef()  #####AVT
 		
-        self.ID_ImagingModeAVT_PixelFormat = wx.NewId()
-        self.ID_PixelFormat_Mono8 = wx.NewId()
-        self.ID_PixelFormat_Mono16 = wx.NewId()
+        self.ID_ImagingModeAVT_PixelFormat = wx.NewIdRef()
+        self.ID_PixelFormat_Mono8 = wx.NewIdRef()
+        self.ID_PixelFormat_Mono16 = wx.NewIdRef()
 
-        self.ID_ImagingModeTheta_Live = wx.NewId()
-        self.ID_ImagingModeTheta_Absorption = wx.NewId()
-        self.ID_ImagingTheta_RemoveBackground = wx.NewId()
-        self.ID_ImagingTheta_UseROI = wx.NewId()
+        self.ID_ImagingModeTheta_Live = wx.NewIdRef()
+        self.ID_ImagingModeTheta_Absorption = wx.NewIdRef()
+        self.ID_ImagingTheta_RemoveBackground = wx.NewIdRef()
+        self.ID_ImagingTheta_UseROI = wx.NewIdRef()
 
-        self.ID_ImagingModeSony_Live = wx.NewId()
-        self.ID_ImagingModeSony_Absorption = wx.NewId()
+        self.ID_ImagingModeSony_Live = wx.NewIdRef()
+        self.ID_ImagingModeSony_Absorption = wx.NewIdRef()
 
-        self.ID_SettingsLoad = wx.NewId()
-        self.ID_SettingsSave = wx.NewId()
+        self.ID_SettingsLoad = wx.NewIdRef()
+        self.ID_SettingsSave = wx.NewIdRef()
 
-        self.ID_HelpMenu = wx.NewId()
-        self.ID_AboutMenu = wx.NewId()
+        self.ID_HelpMenu = wx.NewIdRef()
+        self.ID_AboutMenu = wx.NewIdRef()
+
+        
+
+        #Bind fullscreen button
+        self.Bind(wx.EVT_TOOL, self.OnFullscreenButton, id=self.ID_fullscreen)
 
         #Queues for image acquisition
         self.imagequeue_AVT = queue.Queue(3)  ####AVT ; ATTENTION Argument of .queue() not clear
@@ -736,8 +746,20 @@ class ImgAcquireApp(wx.App):
                               size=(1000, 800),
                               )
 
-        #set main icon
+
+        #new set main icon, original below
         icons = wx.IconBundle()
+        for icon in ['acquire16.png',
+                    'acquire24.png',
+                    'acquire32.png',
+                    'acquire48.png']:
+            icon_path = os.path.join(settings.bitmappath, icon)
+            icon_obj = wx.Icon(icon_path, wx.BITMAP_TYPE_PNG)  # Load icon from file
+            icons.AddIcon(icon_obj)  # Add the icon object to the bundle
+        self.frame.SetIcons(icons)
+
+        #set main icon
+        '''icons = wx.IconBundle()
         for icon in ['acquire16.png',
                      'acquire24.png',
                      'acquire32.png',
@@ -745,7 +767,9 @@ class ImgAcquireApp(wx.App):
             icons.AddIconFromFile(os.path.join(settings.bitmappath, icon),
                                   wx.BITMAP_TYPE_PNG)
         self.frame.SetIcons(icons)
+        '''
 
+        
         #aui-manager
         self.manager = wx.aui.AuiManager(self.frame,
                                      wx.aui.AUI_MGR_RECTANGLE_HINT | 
@@ -800,7 +824,7 @@ class ImgAcquireApp(wx.App):
         submenu_ImagingModeAVT_PixelFormat.AppendRadioItem(self.ID_PixelFormat_Mono8, 'Mono8')
         submenu_ImagingModeAVT_PixelFormat.AppendRadioItem(self.ID_PixelFormat_Mono16,'Mono16')
        
-        menu_imaging_mode_AVT.AppendMenu(self.ID_ImagingModeAVT_PixelFormat, 'Image Format',submenu_ImagingModeAVT_PixelFormat)
+        menu_imaging_mode_AVT.AppendSubMenu(submenu_ImagingModeAVT_PixelFormat, 'Image Format')
         # menu_imaging_mode_AVT.AppendCheckItem(self.ID_ImagingAVT_RemoveBackground, 'Remove Background')
         # menu_imaging_mode_AVT.AppendCheckItem(self.ID_ImagingAVT_UseROI, 'Use Region of Interest')  ##### this one we might not need later ???
         
@@ -809,12 +833,16 @@ class ImgAcquireApp(wx.App):
         
         if self.imaging_mode_AVT == 'live':  ####### Maybe rather use continuous, multiframe, single frame ???
             menu_imaging_mode_AVT.Check(self.ID_ImagingModeAVT_Live, True)
+
         elif self.imaging_mode_AVT == 'absorption':
             menu_imaging_mode_AVT.Check(self.ID_ImagingModeAVT_Absorption, True)
+
         elif self.imaging_mode_AVT == 'fluorescence':
             menu_imaging_mode_AVT.Check(self.ID_ImagingModeAVT_Fluorescence,True)
+
         if self.pixelformat_AVT == np.uint8:
             submenu_ImagingModeAVT_PixelFormat.Check(self.ID_PixelFormat_Mono8,True)
+
         elif self.pixelformat_AVT == np.uint16:
             submenu_ImagingModeAVT_PixelFormat.Check(self.ID_PixelFormat_Mono16,True)
 
@@ -987,6 +1015,26 @@ class ImgAcquireApp(wx.App):
         self.toolbar.SetToolBitmapSize(wx.Size(24, 24))
 
         #create bitmaps
+        stop_path = os.path.join(settings.bitmappath, 'stop.png')
+        go_path = os.path.join(settings.bitmappath, 'go.png')
+        save_path = os.path.join(settings.bitmappath, 'save.png')
+        if os.path.exists(stop_path):
+            self.bitmap_stop = wx.Bitmap(stop_path, wx.BITMAP_TYPE_PNG)
+        else:
+            self.bitmap_stop = wx.ArtProvider.GetBitmap(wx.ART_ERROR, wx.ART_TOOLBAR, (24,24))
+        if os.path.exists(go_path):
+            self.bitmap_go = wx.Bitmap(go_path, wx.BITMAP_TYPE_PNG)
+        else:
+            self.bitmap_go = wx.ArtProvider.GetBitmap(wx.ART_GO_FORWARD, wx.ART_TOOLBAR, (24,24))
+        if os.path.exists(save_path):
+            self.bitmap_save = wx.Bitmap(save_path, wx.BITMAP_TYPE_PNG)
+        else:
+            self.bitmap_save = wx.ArtProvider.GetBitmap(wx.ART_FILE_SAVE, wx.ART_TOOLBAR, (24,24))
+
+
+
+        '''
+        #original create bitmaps
         self.bitmap_stop = wx.Bitmap(os.path.join(settings.bitmappath,
                                              'stop.png'),
                                 wx.BITMAP_TYPE_PNG)
@@ -996,54 +1044,118 @@ class ImgAcquireApp(wx.App):
                               wx.BITMAP_TYPE_PNG)
         self.bitmap_save = wx.Bitmap(os.path.join(settings.bitmappath,
                                                   'save.png'))
-        
+        '''
          
 
         #go-buttons
-        if useTheta:
-            self.acquire_theta_button = self.toolbar.AddCheckLabelTool(
+        #new buttons original below
+
+        if settings.useTheta:
+            self.acquire_theta_button = self.toolbar.AddCheckTool(
                 self.ID_AcquireThetaButton,
-                label="Acquire Theta",
-                bitmap=self.bitmap_stop,
-                shortHelp="Acquire",
-                longHelp="aquire images"
-                )
-    
+                "Acquire",
+                self.bitmap_stop,
+                wx.NullBitmap,
+                "Acquire",
+                "aquire images"
+            )
             self.Bind(wx.EVT_TOOL,
                       self.OnAcquireThetaButton,
                       id=self.ID_AcquireThetaButton)
-            
             #save image button
-            #TODO: which image to save?
-            self.ID_SaveImageTheta = wx.NewId()
-            self.toolbar.AddLabelTool(self.ID_SaveImageTheta,
-                                      label='save image',
-                                      bitmap=self.bitmap_save,
-                                      shortHelp='save image')
-            self.Bind(wx.EVT_TOOL, self.OnSaveImageTheta, id=self.ID_SaveImageTheta)
+            self.ID_SaveImageTheta = wx.NewIdRefRef()
+            self.toolbar.AddTool(
+                self.ID_SaveImageTheta.Id,
+                "Save",
+                self.bitmap_save,
+                "save image"
+            )
+            self.Bind(wx.EVT_TOOL, self.OnSaveImageTheta, id=self.ID_SaveImageTheta.Id)
                 
-        if useBluefox:
-            self.acquire_bluefox_button = self.toolbar.AddCheckLabelTool(
+        if settings.useBluefox:
+            self.acquire_bluefox_button = self.toolbar.AddCheckTool(
                 self.ID_AcquireBlueFoxButton,
-                label="Acquire BlueFOX",
-                bitmap=self.bitmap_stop,
-                shortHelp="Acquire",
-                longHelp="aquire images from BlueFOX camera"
-                )
-    
+                "Acquire",
+                self.bitmap_stop,
+                wx.NullBitmap,
+                "Acquire",
+                "aquire images from BlueFOX camera"
+            )
             self.Bind(wx.EVT_TOOL,
                       self.OnAcquireBlueFoxButton,
                       id=self.ID_AcquireBlueFoxButton)
+            self.ID_SaveImageBluefox = wx.NewIdRefRef()
+            self.toolbar.AddTool(
+                self.ID_SaveImageBluefox.Id,
+                "Save",
+                self.bitmap_save,
+                "save image"
+            )
+            self.Bind(wx.EVT_TOOL, self.OnSaveImageBluefox, id=self.ID_SaveImageBluefox.Id)
+        
+        if settings.useSony:
+            self.acquire_sony_button = self.toolbar.AddCheckTool(
+                self.ID_AcquireSonyButton,
+                "Acquire",
+                self.bitmap_stop,
+                wx.NullBitmap,
+                "Acquire",
+                "acquire images"
+            )
+            self.Bind(wx.EVT_TOOL, self.OnAcquireSonyButton, id=self.ID_AcquireSonyButton)
+            self.ID_SaveImageSony = wx.NewIdRefRef()
+            self.toolbar.AddTool(
+                self.ID_SaveImageSony.Id,
+                "Save",
+                self.bitmap_save,
+                "save image"
+            )
+            self.Bind(wx.EVT_TOOL, self.OnSaveImageSony, id=self.ID_SaveImageSony.Id)
 
-            self.ID_SaveImageBluefox = wx.NewId()
-            self.toolbar.AddLabelTool(self.ID_SaveImageBluefox,
-                                      label='save image',
-                                      bitmap=self.bitmap_save,
-                                      shortHelp='save image')
-            self.Bind(wx.EVT_TOOL, self.OnSaveImageBluefox, id=self.ID_SaveImageBluefox)
+
+
+
+
+        '''
+        if settings.useTheta:
+            self.acquire_theta_button = self.toolbar.AddCheckTool(
+                self.ID_AcquireThetaButton,
+                "Acquire",
+                self.bitmap_stop,
+                wx.NullBitmap,
+                "Acquire",
+                "aquire images"
+            )
+
+        
+        self.Bind(wx.EVT_TOOL,
+                    self.OnAcquireThetaButton,
+                    id=self.ID_AcquireThetaButton)
+        
+        #save image button
+        #TODO: which image to save?
+        self.ID_SaveImageTheta = wx.NewIdRef()
+        self.toolbar.AddLabelTool(self.ID_SaveImageTheta,
+                                    label='save image',
+                                    bitmap=self.bitmap_save,
+                                    shortHelp='save image')
+        self.Bind(wx.EVT_TOOL, self.OnSaveImageTheta, id=self.ID_SaveImageTheta)
+
+
+        
+        self.Bind(wx.EVT_TOOL,
+                    self.OnAcquireBlueFoxButton,
+                    id=self.ID_AcquireBlueFoxButton)
+
+        self.ID_SaveImageBluefox = wx.NewIdRef()
+        self.toolbar.AddLabelTool(self.ID_SaveImageBluefox,
+                                    label='save image',
+                                    bitmap=self.bitmap_save,
+                                    shortHelp='save image')
+        self.Bind(wx.EVT_TOOL, self.OnSaveImageBluefox, id=self.ID_SaveImageBluefox)
         
         if useSony:
-            self.acquire_sony_button = self.toolbar.AddCheckLabelTool(
+            self.acquire_sony_button = self.toolbar.AddCheckTool(
                 self.ID_AcquireSonyButton,
                 label="Acquire Sony",
                 bitmap=self.bitmap_stop,
@@ -1052,16 +1164,41 @@ class ImgAcquireApp(wx.App):
                 )
             self.Bind(wx.EVT_TOOL, self.OnAcquireSonyButton, id=self.ID_AcquireSonyButton)
             
-            self.ID_SaveImageSony = wx.NewId()
+            self.ID_SaveImageSony = wx.NewIdRef()
             self.toolbar.AddLabelTool(self.ID_SaveImageSony,
                                       label='save image',
                                       bitmap=self.bitmap_save,
                                       shortHelp='save image')
             self.Bind(wx.EVT_TOOL, self.OnSaveImageSony, id=self.ID_SaveImageSony)
-
+'''
 ######AVT ----------- New AVT-section -------- added 09012015
+        
+        if settings.useAVT:
+                self.acquire_AVT_button = self.toolbar.AddCheckTool(
+                    self.ID_AcquireAVTButton,
+                    "Acquire",
+                    self.bitmap_stop,
+                    wx.NullBitmap,
+                    "Acquire",
+                    "aquire images"
+                )
+                self.Bind(wx.EVT_TOOL,
+                        self.OnAcquireAVTButton,
+                        id=self.ID_AcquireAVTButton)
+                self.ID_SaveImageAVT = wx.NewIdRef()
+                self.toolbar.AddTool(
+                    self.ID_SaveImageAVT.Id,
+                    "Save",
+                    self.bitmap_save,
+                    "save image"
+                )
+                self.Bind(wx.EVT_TOOL, self.OnSaveImageAVT, id=self.ID_SaveImageAVT.Id)
+
+
+        '''
+        #original
         if useAVT:
-            self.acquire_AVT_button = self.toolbar.AddCheckLabelTool(
+            self.acquire_AVT_button = self.toolbar.AddCheckTool(
                 self.ID_AcquireAVTButton,
                 label="Acquire AVT",
                 bitmap=self.bitmap_stop,
@@ -1075,22 +1212,32 @@ class ImgAcquireApp(wx.App):
             
             #save image button
             #TODO: which image to save?
-            self.ID_SaveImageAVT = wx.NewId()
+            self.ID_SaveImageAVT = wx.NewIdRef()
             self.toolbar.AddLabelTool(self.ID_SaveImageAVT,
                                       label='save image',
                                       bitmap=self.bitmap_save,
                                       shortHelp='save image')
             self.Bind(wx.EVT_TOOL, self.OnSaveImageAVT, id=self.ID_SaveImageAVT)#### ATTENTION still bound to theta functions
-
+        '''
         
-        #fullscreen button
-        self.ID_fullscreen = wx.NewId()
-        self.toolbar.AddCheckLabelTool(self.ID_fullscreen,
+        #fullscreen button, orignial below
+        fullscreen_bmp = wx.Bitmap(16, 16) 
+        self.toolbar.AddCheckTool(
+            self.ID_fullscreen,
+            "Fullscreen",
+            fullscreen_bmp,
+            wx.NullBitmap,
+            "Fullscreen",
+            "Toggle Fullscreen"
+        )
+        '''
+        self.ID_fullscreen = wx.NewIdRef()
+        self.toolbar.AddCheckTool(self.ID_fullscreen,
                                        label="fullscreen",
                                        bitmap=self.bitmap_go,
                                        shortHelp="Fullscreen")
         self.Bind(wx.EVT_TOOL, self.OnFullscreenButton, id=self.ID_fullscreen)
-
+        '''
  
         #finalize toolbar
         self.toolbar.Realize()
@@ -1330,24 +1477,24 @@ class ImgAcquireApp(wx.App):
     
         #shared markers
         self.marker_roi_theta = ImagePanel.RectMarker(140, 140, 300, 300,
-                                                      linecolor=wx.NamedColour('Magenta'),
+                                                      linecolor=wx.Colour('Magenta'),
                                                       linestyle=wx.SOLID)
         self.markers_shared_theta = [
             self.marker_roi_theta,
             ImagePanel.CrossMarker(100, 100,
-                                   linecolor=wx.NamedColour('Red'),
+                                   linecolor=wx.Colour('Red'),
                                    linestyle=wx.LONG_DASH),
             ImagePanel.CrossMarker(120, 120,
-                                   linecolor=wx.NamedColour('Cyan'),
+                                   linecolor=wx.Colour('Cyan'),
                                    linestyle=wx.SHORT_DASH),
             ]
         self.set_shared_markers_theta()
         
         self.markers_shared_sony = [ImagePanel.RectMarker(100, 100, 200, 200,
-                                                          linecolor = wx.NamedColour('Yellow'),
+                                                          linecolor = wx.Colour('Yellow'),
                                                           linestyle=wx.SOLID),
                                     ImagePanel.CrossMarker(150, 150,
-                                                           linecolor = wx.NamedColour('Blue'),
+                                                           linecolor = wx.Colour('Blue'),
                                                            linestyle = wx.SOLID)
                                     ]
         self.roi_sony = self.markers_shared_sony[0]
@@ -1377,7 +1524,9 @@ class ImgAcquireApp(wx.App):
         self.Bind(EVT_STATUS_MESSAGE, self.OnStatusMessage)
 
         #self.Bind(wx.EVT_CLOSE, self.onclose, self.frame)
-        wx.EVT_CLOSE(self.frame, self.onclose) #TODO: why this?
+        #depreciated wx.EVT_CLOSE(self.frame, self.onclose) #TODO: why this?
+        self.frame.Bind(wx.EVT_CLOSE, self.onclose)
+
 
         self.Bind(wx.EVT_IDLE, self.OnIdle)
 
@@ -1410,7 +1559,7 @@ class ImgAcquireApp(wx.App):
             list(map(image.add_marker, self.markers_shared_sony))
         
     def OnFullscreenButton(self, event):
-        if event.Checked():
+        if event.IsChecked():
             self.frame.ShowFullScreen(True,
                                       wx.FULLSCREEN_NOBORDER
                                       )
@@ -1600,49 +1749,125 @@ class ImgAcquireApp(wx.App):
     def imagesplit(self, img):
         h, w = img.shape
         return img[:h/2],img[h/2:]
-        
+
     def do_toggle_button(self, state, id):
         """Change visual appearance of toolbar buttons."""
+        # Always set red (stop) when untoggled, only set green (go) if state is True and acquisition is running
+        self.toolbar.ToggleTool(id, state)
+        if state:
+            # Only set green if acquisition is confirmed running (handled in OnAcquireAVTButton)
+            self.toolbar.SetToolNormalBitmap(id, self.bitmap_go)
+        else:
+            self.toolbar.SetToolNormalBitmap(id, self.bitmap_stop)
 
+    '''
+    #original  
+    def do_toggle_button(self, state, id):
+        """Change visual appearance of toolbar buttons."""
         self.toolbar.ToggleTool(id, state)
         self.toolbar.SetToolNormalBitmap(id,
                                          self.bitmap_go if state else
                                          self.bitmap_stop)
-
+    '''
 ######AVT ----------- New AVT-section -------- added 15012015
+    
     def OnAcquireAVTButton(self, event):
-        if event.Checked():
+        if event.IsChecked():
+            try:
+                self.start_acquisition_AVT()
+                # Only set green if acquisition started successfully
+                self.do_toggle_button(True, self.ID_AcquireAVTButton)
+            except Exception:
+                # Reset toggle and keep red if acquisition failed
+                self.toolbar.ToggleTool(self.ID_AcquireAVTButton, False)
+                self.do_toggle_button(False, self.ID_AcquireAVTButton)
+        else:
+            self.stop_acquisition_AVT()
+            self.do_toggle_button(False, self.ID_AcquireAVTButton)
+
+
+    '''original
+    def OnAcquireAVTButton(self, event):
+        if event.IsChecked():
             self.start_acquisition_AVT()
         else:
             self.stop_acquisition_AVT()
 
         self.do_toggle_button(event.Checked(), self.ID_AcquireAVTButton)
+    '''
 ######## ---------------------- End new section ------------------	
 	
     def OnAcquireThetaButton(self, event):
-        if event.Checked():
+        if event.IsChecked():
             self.start_acquisition_theta()
         else:
             self.stop_acquisition_theta()
 
-        self.do_toggle_button(event.Checked(), self.ID_AcquireThetaButton)
+        self.do_toggle_button(event.IsChecked(), self.ID_AcquireThetaButton)
 
     def OnAcquireBlueFoxButton(self, event):
-        if event.Checked():
+        if event.IsChecked():
             self.start_acquisition_bluefox()
         else:
             self.stop_acquisition_bluefox()
 
-        self.do_toggle_button(event.Checked(), self.ID_AcquireBlueFoxButton)
+        self.do_toggle_button(event.IsChecked(), self.ID_AcquireBlueFoxButton)
 
     def OnAcquireSonyButton(self, event):
-        if event.Checked():
+        if event.IsChecked():
             self.start_acquisition_sony()
         else:
             self.stop_acquisition_sony()
         
-        self.do_toggle_button(event.Checked(), self.ID_AcquireSonyButton)
+        self.do_toggle_button(event.IsChecked(), self.ID_AcquireSonyButton)
 ######AVT ----------- New AVT-section -------- added 15012015
+    
+    def start_acquisition_AVT(self):
+        try:
+            if 'Guppy' not in globals():
+                raise NameError("AVT camera (Guppy) is not available or not imported.")
+            self.acquiring_AVT = True
+            self.imgproducer_AVT = AcquireThreadAVT(self,
+                                                    cam=Guppy,
+                                                    queue=self.imagequeue_AVT)
+            if self.imaging_mode_AVT == 'live':
+                self.imgconsumer_AVT = ConsumerThreadAVTSingleImage(self, self.imagequeue_AVT)
+            elif self.imaging_mode_AVT == 'absorption':
+                self.imgconsumer_AVT = ConsumerThreadAVTTripleImage(self, self.imagequeue_AVT)
+            elif self.imaging_mode_AVT == 'fluorescence':
+                self.imgconsumer_AVT = ConsumerThreadAVTDoubleImage(self, self.imagequeue_AVT)
+            self.imgconsumer_AVT.start()
+            self.imgproducer_AVT.start()
+        except Exception as e:
+            self.acquiring_AVT = False
+            wx.MessageBox(f"Could not start AVT acquisition: {e}", "Camera Error", wx.ICON_ERROR)
+            raise
+    
+    def stop_acquisition_AVT(self):
+        # Only attempt to stop threads if they exist
+        if hasattr(self, 'imgproducer_AVT') and hasattr(self, 'imgconsumer_AVT'):
+            try:
+                self.imgproducer_AVT.stop()
+                self.imgconsumer_AVT.stop()
+
+                self.imgproducer_AVT.join()
+                self.imgconsumer_AVT.join()
+
+                if self.imgproducer_AVT.isAlive():
+                    print("could not stop AVT producer thread.")
+                if self.imgconsumer_AVT.isAlive():
+                    print("could not stop AVT consumer threads!")
+            except Exception as e:
+                print(f"Error stopping AVT threads: {e}")
+            # Clean up attributes
+            del self.imgproducer_AVT
+            del self.imgconsumer_AVT
+        else:
+            print("AVT acquisition threads not running.")
+        self.acquiring_AVT = False
+    
+    
+    '''original
     def start_acquisition_AVT(self):
         self.acquiring_AVT = True
         self.imgproducer_AVT = AcquireThreadAVT(self,
@@ -1671,7 +1896,7 @@ class ImgAcquireApp(wx.App):
             print("could not stop AVT consumer threads!")
 
         self.acquiring_AVT = False
-	
+    '''
 ######## ---------------------- End new section ------------------
     def start_acquisition_theta(self):
         self.acquiring_theta = True
@@ -1845,6 +2070,73 @@ class ImgAcquireApp(wx.App):
 
     def OnSettingsLoad(self, event):
         import shelve
+        import os
+
+        try:
+            # Ensure the settings directory exists
+            settings_dir = os.path.join(settings.basedir, 'settings')
+            os.makedirs(settings_dir, exist_ok=True)
+
+            # Open settings file
+            settings_path = os.path.join(settings_dir, 'settings_acquire')
+            setting = shelve.open(settings_path)
+
+            try:
+                self.manager.LoadPerspective(setting.get('perspective', ''))
+
+                markers_shared = setting.get('markers_shared_theta', [])
+                markers_theta = setting.get(
+                    'markers_nonshared_theta',
+                    [[] for _ in range(len(self.image_panels_theta))]
+                )
+                zoomsteps = setting.get(
+                    'zoomsteps',
+                    [0] * len(self.image_panels)
+                )
+                colormap_choices = setting.get(
+                    'colormap_choices',
+                    ['gray'] * len(self.image_panels)
+                )
+                contrast_choices = setting.get(
+                    'contrast_choices',
+                    ['auto'] * len(self.image_panels)
+                )
+            finally:
+                setting.close()
+
+            # remove shared markers from image panels    
+            self.clear_shared_markers_theta()
+            self.markers_shared_theta = markers_shared
+
+            for k, markers in enumerate(markers_theta):
+                panel = self.image_panels_theta[k]
+
+                # remove remaining markers from panels (assume: they are nonshared)
+                for m in panel._markers.copy():
+                    panel.remove_marker(m)
+
+                # add loaded markers
+                for m in markers:
+                    panel.add_marker(m)
+
+            # restore shared markers
+            self.set_shared_markers_theta()
+
+            # restore scalings, contrast, colormap
+            for k, panel in enumerate(self.image_panels):
+                panel.zoomstep = zoomsteps[k]
+                panel.colormap_choice = colormap_choices[k]
+                panel.contrast_choice = contrast_choices[k]
+
+            self.frame.Refresh()
+            print("settings loaded")
+        except Exception as e:
+            wx.MessageBox(f"Could not load settings: {e}", "Settings Error", wx.ICON_ERROR)
+
+
+    '''original
+    def OnSettingsLoad(self, event):
+        import shelve
 
         setting = shelve.open(os.path.join(settings.basedir,
                                             'settings/settings_acquire'))
@@ -1887,6 +2179,9 @@ class ImgAcquireApp(wx.App):
         self.frame.Refresh()
         
         print("settings loaded")
+'''
+
+
 
     def OnMenuShowAll(self, event):
         self.manager.LoadPerspective(self.perspective_full)
@@ -2005,6 +2300,82 @@ class TimingDialog(wx.Dialog):
                  repetition_min=600):
         self.repetition_shown = (repetition is not None)
         
+        
+        super().__init__(parent, ID, title, pos, size, style)
+        #original: pre = wx.PreDialog()
+        #pre.Create(parent, ID, title, pos, size, style)
+        #self.PostCreate(pre)
+
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        label = wx.StaticText(self, - 1, "Set camera timings")
+        sizer.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+
+        #entry exposure time
+        #TODO: enable float entry
+        box = wx.BoxSizer(wx.HORIZONTAL)
+        label = wx.StaticText(self, - 1, "Exposure time (\u03BCs)")
+        box.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+        entry = wx.SpinCtrl(self, - 1, "", (50, - 1))
+        #entry = wx.SpinButton(self, -1, style = wx.SP_VERTICAL)
+        entry.SetRange(0, 1000000)
+        entry.SetValue(int(exposure*1000))
+        box.Add(entry, 1, wx.ALIGN_CENTRE | wx.ALL, 5)
+        sizer.Add(box, 0, wx.GROW | wx.ALL, 5)
+        #original: sizer.Add(box, 0, wx.GROW | wx.ALIGN_CENTER_VERTICAL | wx.ALL, 5)
+        self.exposure_time_entry = entry
+
+        if self.repetition_shown:
+            #entry repetition time
+            box = wx.BoxSizer(wx.HORIZONTAL)
+            label = wx.StaticText(self, - 1, "Repetition time (ms)")
+            box.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+            entry = wx.SpinCtrl(self, - 1, "", (50, - 1))
+            entry.SetRange(repetition_min, 50000)
+            entry.SetValue(repetition)
+            box.Add(entry, 1, wx.ALIGN_CENTRE | wx.ALL, 5)
+            sizer.Add(box, 0, wx.GROW | wx.ALL, 5)
+            #original sizer.Add(box, 0, wx.GROW | wx.ALIGN_CENTER_VERTICAL | wx.ALL, 5)
+            self.repetition_time_entry = entry
+
+       
+
+        line = wx.StaticLine(self, - 1, size=(20, - 1), style=wx.LI_HORIZONTAL)
+        sizer.Add(line, 0, wx.GROW | wx.ALL, 5)
+        #original sizer.Add(line, 0, wx.GROW | wx.ALIGN_CENTER_VERTICAL | wx.RIGHT | wx.TOP, 5)
+
+        btnsizer = wx.StdDialogButtonSizer()
+
+        btn = wx.Button(self, wx.ID_OK)
+        btnsizer.AddButton(btn)
+
+        btn = wx.Button(self, wx.ID_CANCEL)
+        btnsizer.AddButton(btn)
+        btnsizer.Realize()
+
+        sizer.Add(btnsizer, 0, wx.GROW | wx.ALL, 5)
+        #original sizer.Add(btnsizer, 0, wx.ALIGN_CENTER_VERTICAL | wx.ALL, 5)
+        self.SetSizer(sizer)
+        sizer.Fit(self)
+
+    def GetResults(self):
+        if self.repetition_shown:
+            return (self.exposure_time_entry.Value / 1000.0,
+                    self.repetition_time_entry.Value)
+        else:
+            return (self.exposure_time_entry.Value / 1000.0)
+
+'''original
+class TimingDialog(wx.Dialog):
+    def __init__(self, parent, ID, title,
+                 size=wx.DefaultSize,
+                 pos=wx.DefaultPosition,
+                 style=wx.DEFAULT_DIALOG_STYLE,
+                 exposure=100,
+                 repetition=600,
+                 repetition_min=600):
+        self.repetition_shown = (repetition is not None)
+        
         pre = wx.PreDialog()
         pre.Create(parent, ID, title, pos, size, style)
         self.PostCreate(pre)
@@ -2057,6 +2428,9 @@ class TimingDialog(wx.Dialog):
         self.SetSizer(sizer)
         sizer.Fit(self)
 
+
+
+        
     def GetResults(self):
         if self.repetition_shown:
             return (self.exposure_time_entry.Value / 1000.0,
@@ -2064,6 +2438,8 @@ class TimingDialog(wx.Dialog):
         else:
             return (self.exposure_time_entry.Value / 1000.0)
 
+'''
+            
 def find_background(img, r = 10.0):
 
     bins = np.linspace(0, 500, 501)
@@ -2087,8 +2463,29 @@ def run_acquire():
     gui.MainLoop()
     return gui
 
+
+if __name__ == '__main__':
+    if useAVT and VimbAcq is not None:
+        try:
+            VimbAcq.open()
+            Guppy = AVTcam.AVTcam(VimbAcq.ID(), VimbAcq)  # AVT
+        except Exception as e:
+            print(f"Failed to open AVT camera: {e}")
+            useAVT = False  # fallback
+        else:
+            print("AVT camera opened successfully.")
+    
+    gui = run_acquire()  # Run GUI always regardless of AVT
+    
+    if useAVT and VimbAcq is not None:
+        VimbAcq.close()
+
+
+'''
+#Original depreciated/not working well code
 if __name__ == '__main__':
 	VimbAcq.open()  ####AVT
 	Guppy = AVTcam.AVTcam(VimbAcq.ID(),VimbAcq) ###AVT
 	gui = run_acquire()
 	VimbAcq.close() ####AVT
+    '''

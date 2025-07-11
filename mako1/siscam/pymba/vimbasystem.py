@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from vimbaobject import VimbaObject
+from .vimbaobject import VimbaObject
 from ctypes import *
 
 # system features are automatically readable as attributes.

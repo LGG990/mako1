@@ -4,7 +4,7 @@
 .open() 
 .close() 
 .set_timing() ; which also sets trigger mode etc. """
-from pymba import * 
+from .pymba import * 
 import numpy as np
 
 
@@ -20,21 +20,24 @@ class VimbAcq(Vimba):  # this class only defines open / close methods to use ' w
 # Want to use with closing(vim.open()) later. So vim.open() has to return vim.
     def open(self):  
         self.startup()
-        print 'Opened Vimba'
+        print ('Opened Vimba')
         return self 
         
     def close(self):
         self.shutdown()
-        print 'Closed Vimba'
+        print( 'Closed Vimba')
         
     def ID(self):
         id = self.getCameraIds()
         if id is None:
-            print 'No Camera found'
+            print ('No Camera found')
             id[0] = 'NotFound'
         else:
             pass
-        return id[0]
+        if id:    
+            return id[0]
+        else:
+            return None
 
 class AVTcam(object):
     def __init__(self, cameraID, vimba):
@@ -42,7 +45,7 @@ class AVTcam(object):
 
     def open(self, mode ,pixel=np.uint8): # see comments on vim.open() for cam.open() ; Prepare camera already here for triggered Acquisition            
         self.camera0.openCamera()
-        print 'AVTcam: Manta open'
+        print ('AVTcam: Manta open')
         if mode == 'absorption' or mode == 'fluorescence':
             self.camera0.ExposureMode = 'TriggerWidth'
             self.camera0.TriggerSelector = 'FrameStart' #'ExposureActive'
@@ -55,7 +58,7 @@ class AVTcam(object):
                 self.camera0.PixelFormat = 'Mono8'
             elif pixel == np.uint16:
                 self.camera0.PixelFormat = 'Mono16'
-            print 'AVTcam: Camera set on Fluorescence mode'
+            print ('AVTcam: Camera set on Fluorescence mode')
         elif mode == 'live':
             self.camera0.ExposureMode = 'Timed'
             self.camera0.TriggerMode = 'Off'
@@ -66,22 +69,22 @@ class AVTcam(object):
                 self.camera0.PixelFormat = 'Mono8'
             elif pixel == np.uint16:
                 self.camera0.PixelFormat = 'Mono16'
-            print 'AVTcam: Camera set on Live mode'
+            print( 'AVTcam: Camera set on Live mode')
         else:
-            print 'AVTcam: Invalid mode specified'
-        print'AVTcam: Pixel Mode set to', self.camera0.PixelFormat
+            print ('AVTcam: Invalid mode specified')
+        print('AVTcam: Pixel Mode set to', self.camera0.PixelFormat)
         return self
         
     def close(self):
         self.camera0.closeCamera()
-        print 'AVTcam: Guppy closed'
+        print ('AVTcam: Guppy closed')
 
     def set_TriggerMode(self,gated=True):
         if not gated:
             self.camera0.TriggerMode = 'On'
             self.camera0.TriggerActivation = 'RisingEdge'
             self.camera0.ExposureMode = 'Timed'
-            print 'AVTCam: Switched to timed trigger mode'
+            print( 'AVTCam: Switched to timed trigger mode')
         else:
             self.camera0.TriggerSelector = 'FrameStart'
             if self.camera0.TriggerMode == 'Off':
@@ -97,7 +100,7 @@ class AVTcam(object):
         self.camera0.ExposureTime = int(round(exposure*1000))
         if self.camera0.TriggerMode == 'On':
             self.camera0.TriggerMode = 'Off'
-            print 'AVTCam: Switched to auto mode'
+            print ('AVTCam: Switched to auto mode')
 
 
     def set_timing(self, integration = 40, repetition = 60, trigger = False,gated=True):
@@ -142,7 +145,7 @@ class AVTcam(object):
         self.camera0.revokeAllFrames()
         self.camera0.runFeatureCommand('AcquisitionStop')
         self.camera0.endCapture()
-        print 'AVTcam: SingleImage done, returning data'
+        print ('AVTcam: SingleImage done, returning data')
         newImage = np.ndarray(shape = (frame0.height,frame0.width))
         newImage = np.copy(imgData)
         return newImage

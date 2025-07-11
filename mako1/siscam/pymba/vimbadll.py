@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-import vimbastructure as structs
-from vimbaexception import VimbaException
+from . import vimbastructure as structs
+from .vimbaexception import VimbaException
 from sys import platform as sys_plat
 import platform
 import os
@@ -8,11 +8,14 @@ from ctypes import *
 
 if sys_plat == "win32":
     from ctypes.util import find_msvcrt
-    _cruntime = cdll.LoadLibrary(find_msvcrt())
+    _cruntime = cdll.LoadLibrary("msvcrt.dll")
+    #_cruntime = cdll.LoadLibrary(find_msvcrt())
     if '64' in platform.architecture()[0]:
-        vimbaC_path = r'C:\Program Files\Allied Vision Technologies\AVTVimba_1.3\VimbaC\Bin\Win64\VimbaC.dll'
+        vimbaC_path = r'C:\Program Files\Allied Vision\Vimba_6.0\VimbaC\Bin\Win64\VimbaC.dll'
+        #vimbaC_path = r'C:\Program Files\Allied Vision Technologies\AVTVimba_1.3\VimbaC\Bin\Win64\VimbaC.dll'
     else:
-        vimbaC_path = r'C:\Program Files\Allied Vision Technologies\AVTVimba_1.3\VimbaC\Bin\Win32\VimbaC.dll'
+        vimbaC_path = r'C:\Program Files\Allied Vision\Vimba_6.0\VimbaC\Bin\Win32\VimbaC.dll'
+        #vimbaC_path = r'C:\Program Files\Allied Vision Technologies\AVTVimba_1.3\VimbaC\Bin\Win32\VimbaC.dll'
     dll_loader = windll
 else:
     _cruntime = CDLL("libc.so.6")

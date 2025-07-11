@@ -113,7 +113,7 @@ class TreeModel(object):
         try:
             names = listdir(dayimgdir)
         except EnvironmentError:
-            print 'cannot list content of directory "%s"'%dayimgdir
+            print( 'cannot list content of directory "%s"'%dayimgdir)
             names = []
 
         #loop over all image files in day dir, sort into corresponding list
@@ -162,7 +162,7 @@ class TreeModel(object):
             return r
         
 class TreeModelSync(TreeModel):
-    """Macht automatische Updates falls Änderung im Filesystem bemerkt wird.
+    """Macht automatische Updates falls ï¿½nderung im Filesystem bemerkt wird.
     Note: daydir sollte tag/images sein!"""
     def __init__(self, root):
         #super(TreeModel, self).__init__(root)
@@ -179,7 +179,7 @@ class TreeModelSync(TreeModel):
         actdirmtime = stat(daydir).st_mtime
 
         if actdirmtime > dirmtime:
-            print "directory %s has changed, reloading"%daydir
+            print( "directory %s has changed, reloading"%daydir)
 
             #recreate data structure day
             del day[:]
@@ -249,7 +249,7 @@ class ImageTreePanel(wx.Panel):
     def OnActivate(self, event):
         index = self.treectrl.GetIndexOfItem(event.Item)
         file = self.treemodel.GetItemFile(index)
-        print file
+        print (file)
 
 class ImageTreeApp(wx.App):
     """demo application to test ImageTreePanel"""
@@ -269,17 +269,17 @@ class ImageTreeApp(wx.App):
     def OnActivate(self, event):
         #print "in ImageTreeApp/OnActivate. Item: ", event.Item
         index = self.panel.treectrl.GetIndexOfItem(event.Item)
-        print "in ImageTreeApp/OnActivate ", index
+        print ("in ImageTreeApp/OnActivate ", index)
         #if len(index)==3:
         file = self.treemodel.GetItemFile(index)
-        print file
+        print (file)
         next = self.panel.treectrl.GetNextSibling(event.Item)
         if next.IsOk():
             self.panel.treectrl.SelectItem(next)
 
     def OnRightClick(self, event):
         index = self.panel.treectrl.GetIndexOfItem(event.Item)
-        print "in ImageTreeApp/OnRightClick", index
+        print( "in ImageTreeApp/OnRightClick", index)
 
         menu = wx.Menu()
         if len(index)>=1:
@@ -301,10 +301,10 @@ def run_imagetreeapp():
 def test_search():
     datadir = settings.imagesavepath
     treemodel = TreeModelSync(datadir)
-    print treemodel.find_file('20090208-results-0000.sis')
+    print (treemodel.find_file('20090208-results-0000.sis'))
 
 if __name__ == '__main__':
-    import settings
+    from . import settings
     #gui = run_imagetreeapp()
     test_search()
 

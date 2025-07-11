@@ -100,20 +100,20 @@ def test_write_read():
     
     write_raw_image('img/testsave.sis', rawimg)
     rawimgsaved = read('img/testsave.sis')
-    print "load/save/load sucess:", numpy.all(rawimgsaved == rawimg)
+    print("load/save/load sucess:", numpy.all(rawimgsaved == rawimg))
 
 def test_read(filename):
-    print "loading..."
+    print ("loading...")
     sys.stdout.flush()
     loadimg(filename)
-    print "done"
+    print ("done")
     sys.stdout.flush()
 
 def test_save(filename, img):
-    print "saving..."
+    print ("saving...")
     sys.stdout.flush()
     write_raw_image(filename, img)
-    print "done"
+    print ("done")
     sys.stdout.flush()
 
 def simultanous_write_read():
@@ -138,7 +138,7 @@ def simultanous_write_read():
 
 def test_get_size():
     f = 'img/test.sis'
-    print image_size(f)
+    print (image_size(f))
 
 if __name__ == '__main__':
     #test_write_read()

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-import vimbastructure as structs
-from vimbaexception import VimbaException
-from vimbadll import VimbaDLL
+from . import vimbastructure as structs
+from .vimbaexception import VimbaException
+from .vimbadll import VimbaDLL
 from ctypes import *
 
 # class may extend a generic Vimba entity class one day...

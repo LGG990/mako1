@@ -24,9 +24,9 @@ import settings
 import os.path
 
 from observer import Subject, changes_state
-import imagefile
+from PIL import ImageFile
 
-from time import clock as time
+#from time import clock as time
 
 def Nmin(a,b):
     if a is None:
@@ -47,12 +47,12 @@ class MyScrolledPanel(ScrolledPanel):
     def OnChildFocus(self, evt):
         pass
 
-class BitmapDisplay(wx.PyControl):
+class BitmapDisplay(wx.Control):
     """Display static bitmap."""
 
     def __init__(self, parent, bitmap = None, size = wx.DefaultSize):
-        wx.PyControl.__init__(self, parent, -1, size = size, style = wx.BORDER_NONE)
-        self.EmptyBitmap = wx.BitmapFromBufferRGBA(1,1, '\x00\x00\x00\x00')
+        wx.Control.__init__(self, parent, -1, size = size, style = wx.BORDER_NONE)
+        self.EmptyBitmap = wx.Bitmap.FromBufferRGBA(1,1, b'\x00\x00\x00\x00')
         if bitmap is not None:
             self.bitmap = bitmap
         else:
@@ -138,12 +138,13 @@ class ImageDisplay(wx.PyControl):
     """Displays image (with scaling).  Uses L{BitmapDisplayOverlay}."""
 
     def __init__(self, parent, image = None, scale = 1):
-        wx.PyControl.__init__(self, parent, -1)
+        wx.Control.__init__(self, parent, -1)
+        
         self.do_init(image, scale)
 
     def do_init(self, image, scale = 1):
-        self.EmptyBitmap = wx.BitmapFromBufferRGBA(1,1, '\x00\x00\x00\x00')
-        self.EmptyImage = wx.ImageFromBitmap(self.EmptyBitmap)
+        self.EmptyBitmap = wx.Bitmap.FromBufferRGBA(1,1, b'\x00\x00\x00\x00')
+        self.EmptyImage = self.EmptyBitmap.ConvertToImage()
         self._scale = None
         if image is None:
             self._image = self.EmptyImage
@@ -171,8 +172,19 @@ class ImageDisplay(wx.PyControl):
             self.draw()
 
     def do_scale(self):
+        if self._image is None:
+            return  # no image to scale
+        
+        # Check if _image has 'Ok' method and call it safely
+        if hasattr(self._image, 'Ok'):
+            if not self._image.Ok():
+                return  # invalid image, skip scaling
+        else:
+            # If _image does not have Ok method, assume it's valid or skip
+            pass
+
         scale = self._scale
-        if self._image.Ok():
+        if hasattr(self._image, 'Ok') and self._image.Ok():
             if scale < 1:
                 quality = wx.IMAGE_QUALITY_HIGH
             else:
@@ -197,8 +209,8 @@ class ImageDisplay(wx.PyControl):
     scale = property(get_scale, set_scale)
 
     def draw(self):
-        if self.image_scaled.Ok():
-            self._bitmap = wx.BitmapFromImage(self.image_scaled)
+        if hasattr(self.image_scaled, 'Ok') and self.image_scaled.Ok():
+            self._bitmap = wx.Bitmap(self.image_scaled)
             self.imgview.SetBitmap(self._bitmap)
 
 
@@ -805,7 +817,6 @@ class ImagePanel(wx.Panel):
 
 class ZoomToolbar(wx.ToolBar):
     """Toolbar with + and - tools for zooming"""
-    
     def __init__(self, parent):
         wx.ToolBar.__init__(self, parent, -1)
         
@@ -814,21 +825,36 @@ class ZoomToolbar(wx.ToolBar):
 
         self.SetToolBitmapSize(wx.Size(24, 24))
 
-        self.AddLabelTool(self._ZOOM_IN,
-                          'zoom in',
-                          wx.Bitmap(os.path.join(settings.bitmappath,
-                                                 'zoomin.png'),
-                                    wx.BITMAP_TYPE_PNG),
-                          shortHelp = 'Zoom in',
-                          longHelp = 'Zool in')
+        self.AddTool(self._ZOOM_IN,
+                     'zoom in',
+                     wx.Bitmap(os.path.join(settings.bitmappath,
+                                            'zoomin.png'),
+                               wx.BITMAP_TYPE_PNG),
+                     'Zoom in')
 
-        self.AddLabelTool(self._ZOOM_OUT,
-                          'zoom out',
-                          wx.Bitmap(os.path.join(settings.bitmappath,
-                                                 'zoomout.png'),
-                                    wx.BITMAP_TYPE_PNG),
-                          shortHelp = 'Zoom out',
-                          longHelp = 'Zoom out')
+        self.AddTool(self._ZOOM_OUT,
+                     'zoom out',
+                     wx.Bitmap(os.path.join(settings.bitmappath,
+                                            'zoomout.png'),
+                               wx.BITMAP_TYPE_PNG),
+                     'Zoom out')
+
+        '''self.AddTool(self._ZOOM_IN,
+                            'zoom in',
+                            wx.Bitmap('zoom_in.png'),
+                            wx.NullBitmap,
+                            wx.ITEM_NORMAL,
+                            'Zoom in',
+                            'Zool in')
+
+        self.AddTool(self._ZOOM_OUT,
+                            'zoom out',
+                            wx.Bitmap('zoom_in.png'),
+                            wx.NullBitmap,
+                            wx.ITEM_NORMAL,
+                            'Zoom out',
+                            'Zoom out')
+                            '''
 
 class CamImagePanel(ImagePanel):
     """Image panel with Toolbar, status bar, and L{CamImageDisplay}
